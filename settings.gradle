@@ -1,0 +1,10 @@
+rootProject.name = 'soar-demo'
+
+include 'logs-api'
+include 'core-banking-service'
+include 'admin-ui'
+include 'fraud-detection-engine'
+include 'verification-service'
+include 'data-generation-service'
+include 'workflows'
+include 'case-management-service'

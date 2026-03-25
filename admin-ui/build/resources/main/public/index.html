@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SOAR Command Center | Powered by LittleHorse</title>
+<meta name="description" content="Security Orchestration, Automation and Response dashboard for real-time fraud detection and account management."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+<div id="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-icon">LH</div>
+      <div class="logo-text">
+        <span class="logo-title">SOAR</span>
+        <span class="logo-sub">Command Center</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" id="nav-dashboard" onclick="showTab('dashboard')">
+        <span class="nav-icon">&#9632;</span> Dashboard
+      </button>
+      <button class="nav-item" id="nav-alerts" onclick="showTab('alerts')">
+        <span class="nav-icon">&#9650;</span> Alerts
+        <span class="badge" id="badge-alerts">0</span>
+      </button>
+      <button class="nav-item" id="nav-logs" onclick="showTab('logs')">
+        <span class="nav-icon">&#9679;</span> Log Search
+      </button>
+      <button class="nav-item" id="nav-accounts" onclick="showTab('accounts')">
+        <span class="nav-icon">&#9670;</span> Accounts
+      </button>
+      <button class="nav-item" id="nav-cases" onclick="showTab('cases')">
+        <span class="nav-icon">&#9633;</span> Cases
+      </button>
+      <button class="nav-item" id="nav-workflows" onclick="showTab('workflows')">
+        <span class="nav-icon">&#9651;</span> Workflows
+        <span class="badge badge-blue" id="badge-workflows">0</span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="status-dot" id="lh-status-dot"></div>
+      <span id="lh-status-text">Connecting...</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Dashboard Tab -->
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="page-header">
+        <h1>Dashboard</h1>
+        <div class="last-updated" id="last-updated-dash">Refreshing...</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card" onclick="showTab('alerts')">
+          <div class="stat-label">Open Alerts</div>
+          <div class="stat-value critical" id="stat-open-alerts">-</div>
+          <div class="stat-trend" id="stat-alerts-severity"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Logs</div>
+          <div class="stat-value" id="stat-log-count">-</div>
+          <div class="stat-trend">events ingested</div>
+        </div>
+        <div class="stat-card" onclick="showTab('accounts')">
+          <div class="stat-label">Frozen Accounts</div>
+          <div class="stat-value warning" id="stat-frozen">-</div>
+          <div class="stat-trend">of 3000 total</div>
+        </div>
+        <div class="stat-card" onclick="showTab('workflows')">
+          <div class="stat-label">Active Workflows</div>
+          <div class="stat-value info" id="stat-wf-running">-</div>
+          <div class="stat-trend">LH WfRuns</div>
+        </div>
+      </div>
+      <div class="section-header"><h2>Recent Critical Alerts</h2></div>
+      <div id="dash-alerts-table" class="table-wrapper"><div class="loading">Loading...</div></div>
+      <div class="section-header" style="margin-top:24px"><h2>Live Event Feed</h2></div>
+      <div id="dash-log-feed" class="log-feed"></div>
+    </div>
+
+    <!-- Alerts Tab -->
+    <div id="tab-alerts" class="tab-content">
+      <div class="page-header">
+        <h1>Security Alerts</h1>
+        <div class="filter-row">
+          <select id="alert-status-filter" onchange="loadAlerts()">
+            <option value="">All Status</option>
+            <option value="OPEN">Open</option>
+            <option value="INVESTIGATING">Investigating</option>
+            <option value="CLOSED">Closed</option>
+          </select>
+          <select id="alert-severity-filter" onchange="loadAlerts()">
+            <option value="">All Severity</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+          </select>
+          <button class="btn btn-secondary" onclick="loadAlerts()">Refresh</button>
+        </div>
+      </div>
+      <div id="alerts-container" class="table-wrapper"><div class="loading">Loading...</div></div>
+      <!-- Investigation Modal -->
+      <div id="investigate-modal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Launch Investigation</h3>
+            <button class="modal-close" onclick="closeModal('investigate-modal')">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p>Start an <strong>alert-investigation-workflow</strong> in LittleHorse for:</p>
+            <div id="modal-alert-detail" class="modal-detail"></div>
+            <p class="modal-hint">The workflow will pause and wait for your analyst decision (FREEZE or CLOSE) as an External Event.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('investigate-modal')">Cancel</button>
+            <button class="btn btn-primary" id="btn-launch-investigation" onclick="launchInvestigation()">Launch Workflow</button>
+          </div>
+        </div>
+      </div>
+      <!-- Analyst Decision Modal -->
+      <div id="decision-modal" class="modal hidden">
+        <div class="modal-content">
+          <div class="modal-header"><h3>Analyst Decision</h3><button class="modal-close" onclick="closeModal('decision-modal')">&times;</button></div>
+          <div class="modal-body">
+            <p>Send an <strong>ANALYST_DECISION</strong> External Event to workflow:</p>
+            <code id="decision-wfrun-id" class="code-block"></code>
+            <div class="decision-buttons">
+              <button class="btn btn-danger" onclick="sendDecision('FREEZE')">Freeze Account</button>
+              <button class="btn btn-success" onclick="sendDecision('CLOSE')">Close - No Action</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logs Tab -->
+    <div id="tab-logs" class="tab-content">
+      <div class="page-header"><h1>Log Search</h1></div>
+      <div class="search-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Username</label>
+            <input id="log-username" type="text" placeholder="e.g. james.smith" />
+          </div>
+          <div class="form-group">
+            <label>Event Type</label>
+            <select id="log-event">
+              <option value="">Any</option>
+              <option>login</option><option>logout</option><option>purchase</option>
+              <option>transfer</option><option>card-verify</option><option>check-verify</option>
+              <option>fraud-check-complete</option><option>failed-auth</option>
+              <option>balance-inquiry</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Severity</label>
+            <select id="log-severity">
+              <option value="">Any</option>
+              <option>CRITICAL</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Country</label>
+            <input id="log-country" type="text" placeholder="e.g. US" maxlength="2"/>
+          </div>
+          <div class="form-group">
+            <label>IP Address</label>
+            <input id="log-ip" type="text" placeholder="e.g. 104.1.2.3"/>
+          </div>
+          <div class="form-group">
+            <label>Limit</label>
+            <select id="log-limit">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="250">250</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="searchLogs()">Search</button>
+      </div>
+      <div id="logs-result" class="table-wrapper"><div class="empty-state">Run a search to see logs</div></div>
+    </div>
+
+    <!-- Accounts Tab -->
+    <div id="tab-accounts" class="tab-content">
+      <div class="page-header">
+        <h1>Account Management</h1>
+        <div class="filter-row">
+          <input id="acc-search" type="text" placeholder="Search username..." style="min-width:220px"/>
+          <select id="acc-frozen-filter">
+            <option value="">All</option>
+            <option value="true">Frozen Only</option>
+            <option value="false">Active Only</option>
+          </select>
+          <button class="btn btn-primary" onclick="searchAccounts()">Search</button>
+        </div>
+      </div>
+      <div id="accounts-result" class="table-wrapper"><div class="empty-state">Search for an account above</div></div>
+    </div>
+
+    <!-- Cases Tab -->
+    <div id="tab-cases" class="tab-content">
+      <div class="page-header">
+        <h1>Case Management</h1>
+        <div class="filter-row">
+          <select id="case-status-filter" onchange="loadCases()">
+            <option value="">All Status</option>
+            <option value="OPEN">Open</option>
+            <option value="CLOSED">Closed</option>
+          </select>
+          <button class="btn btn-secondary" onclick="loadCases()">Refresh</button>
+        </div>
+      </div>
+      <div id="cases-container" class="table-wrapper"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- Workflows Tab -->
+    <div id="tab-workflows" class="tab-content">
+      <div class="page-header">
+        <h1>LittleHorse Workflows</h1>
+        <button class="btn btn-secondary" onclick="loadWorkflows()">Refresh</button>
+      </div>
+      <div class="wf-legend">
+        <span class="wf-spec-badge fraud">fraud-alert-workflow</span>
+        <span class="wf-spec-badge invest">alert-investigation-workflow</span>
+        <span class="wf-spec-badge verify">transaction-verification-workflow</span>
+        <span class="wf-spec-badge freeze">account-freeze-workflow</span>
+      </div>
+      <div id="workflows-container" class="table-wrapper"><div class="loading">Loading...</div></div>
+    </div>
+  </main>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

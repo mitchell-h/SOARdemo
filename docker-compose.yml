@@ -1,0 +1,181 @@
+version: "3.9"
+
+services:
+
+  # ============================================================
+  # LittleHorse Server (gRPC on 2023, dashboard on 8080)
+  # ============================================================
+  lh-server:
+    image: ghcr.io/littlehorse-enterprises/littlehorse/lh-server:1.0.1
+    container_name: lh-server
+    ports:
+      - "2023:2023"
+      - "8080:8080"
+    environment:
+      - LHS_ADVERTISED_LISTENERS=plain://lh-server:2023
+      - LHS_LISTENERS=PLAIN:2023
+      - LHS_LISTENERS_PROTOCOL_MAP=PLAIN:PLAIN
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/liveness"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # ============================================================
+  # Logs API - :7001
+  # ============================================================
+  logs-api:
+    build:
+      context: .
+      dockerfile: logs-api/Dockerfile
+    container_name: logs-api
+    ports:
+      - "7001:7001"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7001/logs?limit=1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Core Banking Service - :7002
+  # ============================================================
+  core-banking-service:
+    build:
+      context: .
+      dockerfile: core-banking-service/Dockerfile
+    container_name: core-banking-service
+    ports:
+      - "7002:7002"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7002/accounts/count"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Admin UI - :7003
+  # ============================================================
+  admin-ui:
+    build:
+      context: .
+      dockerfile: admin-ui/Dockerfile
+    container_name: admin-ui
+    ports:
+      - "7003:7003"
+    environment:
+      - LOGS_API_URL=http://logs-api:7001
+      - CORE_BANKING_URL=http://core-banking-service:7002
+      - LHW_SERVER_HOST=lh-server
+      - LHW_SERVER_PORT=2023
+      - CASE_MANAGEMENT_URL=http://case-management-service:7007
+    depends_on:
+      lh-server:
+        condition: service_healthy
+      logs-api:
+        condition: service_healthy
+      core-banking-service:
+        condition: service_healthy
+
+  # ============================================================
+  # Fraud Detection Engine - :7004
+  # ============================================================
+  fraud-detection-engine:
+    build:
+      context: .
+      dockerfile: fraud-detection-engine/Dockerfile
+    container_name: fraud-detection-engine
+    ports:
+      - "7004:7004"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--post-data={}", "http://localhost:7004/detect"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================
+  # Verification Service - :7005
+  # ============================================================
+  verification-service:
+    build:
+      context: .
+      dockerfile: verification-service/Dockerfile
+    container_name: verification-service
+    ports:
+      - "7005:7005"
+    environment:
+      - CORE_BANKING_URL=http://core-banking-service:7002
+    depends_on:
+      core-banking-service:
+        condition: service_healthy
+
+  # ============================================================
+  # Data Generation Service - :7006
+  # Generates live events and triggers LH fraud workflows
+  # ============================================================
+  data-generation-service:
+    build:
+      context: .
+      dockerfile: data-generation-service/Dockerfile
+    container_name: data-generation-service
+    ports:
+      - "7006:7006"
+    environment:
+      - LOGS_API_URL=http://logs-api:7001
+      - LHW_SERVER_HOST=lh-server
+      - LHW_SERVER_PORT=2023
+      - LH_ENABLED=true
+    depends_on:
+      lh-server:
+        condition: service_healthy
+      logs-api:
+        condition: service_healthy
+
+  # ============================================================
+  # Workflows (LH Task Workers + WfSpec Registration)
+  # This is the orchestration brain - registers all WfSpecs and
+  # runs 9 LHTaskWorkers to execute tasks when LH schedules them.
+  # ============================================================
+  workflows:
+    build:
+      context: .
+      dockerfile: workflows/Dockerfile
+    container_name: workflows
+    environment:
+      - LHW_SERVER_HOST=lh-server
+      - LHW_SERVER_PORT=2023
+      - CORE_BANKING_URL=http://core-banking-service:7002
+      - FRAUD_ENGINE_URL=http://fraud-detection-engine:7004
+      - VERIFICATION_URL=http://verification-service:7005
+      - LOGS_API_URL=http://logs-api:7001
+      - CASE_MANAGEMENT_URL=http://case-management-service:7007
+    depends_on:
+      lh-server:
+        condition: service_healthy
+      logs-api:
+        condition: service_healthy
+      core-banking-service:
+        condition: service_healthy
+      fraud-detection-engine:
+        condition: service_healthy
+      verification-service:
+        condition: service_healthy
+      case-management-service:
+        condition: service_healthy
+
+  # ============================================================
+  # Case Management Service - :7007 [NEW]
+  # ============================================================
+  case-management-service:
+    build:
+      context: .
+      dockerfile: case-management-service/Dockerfile
+    container_name: case-management-service
+    ports:
+      - "7007:7007"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7007/api/cases"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

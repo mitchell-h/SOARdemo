@@ -1,0 +1,19 @@
+plugins {
+    id 'java'
+    id 'com.gradleup.shadow'
+}
+
+dependencies {
+    implementation "io.javalin:javalin:$javalinVersion"
+    implementation "com.fasterxml.jackson.core:jackson-databind:$jacksonVersion"
+    implementation "org.slf4j:slf4j-simple:$slf4jVersion"
+    
+    // For in-memory data storage (JSON)
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion"
+}
+
+shadowJar {
+    archiveBaseName.set('case-management-service')
+    archiveClassifier.set('all')
+    archiveVersion.set('')
+}
