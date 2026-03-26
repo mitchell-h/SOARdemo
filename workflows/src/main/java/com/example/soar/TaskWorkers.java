@@ -45,6 +45,35 @@ public class TaskWorkers {
     }
 
     // -----------------------------------------------------------------
+    // get-alert-details: returns JSON string of the alert
+    // -----------------------------------------------------------------
+    @LHTaskMethod("get-alert-details")
+    public String getAlertDetails(String alertId) {
+        HttpResponse<String> resp = Unirest.get(LOGS_API_URL + "/alerts/" + alertId).asString();
+        if (resp.isSuccess()) {
+            System.out.println("[task:get-alert-details] fetched alert: " + alertId);
+            return resp.getBody();
+        }
+        throw new RuntimeException("Alert not found: " + alertId + " (status=" + resp.getStatus() + ")");
+    }
+
+    // -----------------------------------------------------------------
+    // get-user-logs: returns JSON string of the last 10 logs for a user
+    // -----------------------------------------------------------------
+    @LHTaskMethod("get-user-logs")
+    public String getUserLogs(String username) {
+        HttpResponse<String> resp = Unirest.get(LOGS_API_URL + "/logs")
+            .queryString("username", username)
+            .queryString("limit", 10)
+            .asString();
+        if (resp.isSuccess()) {
+            System.out.println("[task:get-user-logs] fetched logs for: " + username);
+            return resp.getBody();
+        }
+        return "[]";
+    }
+
+    // -----------------------------------------------------------------
     // get-fraud-score: calls fraud detection engine, returns score (double)
     // -----------------------------------------------------------------
     @LHTaskMethod("get-fraud-score")

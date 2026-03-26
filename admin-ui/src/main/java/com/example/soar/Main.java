@@ -152,6 +152,17 @@ public class Main {
                             m.put("wfSpecName", wfName);
                             m.put("status", run.getStatus().name());
                             m.put("startTime", run.getStartTime() != null ? run.getStartTime().toString() : "");
+                            
+                            // Map variables for frontend
+                            Map<String, Object> vars = new HashMap<>();
+                            run.getVariablesMap().forEach((k, v) -> {
+                                if (v.hasStr()) vars.put(k, v.getStr());
+                                else if (v.hasDouble()) vars.put(k, v.getDouble());
+                                else if (v.hasInt()) vars.put(k, v.getInt());
+                                else if (v.hasBool()) vars.put(k, v.getBool());
+                                else vars.put(k, v.toString());
+                            });
+                            m.put("variables", vars);
                             runs.add(m);
                         } catch (Exception ignore) {}
                     }

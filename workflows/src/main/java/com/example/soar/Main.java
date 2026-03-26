@@ -13,52 +13,60 @@ public class Main {
         LHConfig config = new LHConfig();
 
         System.out.println("[workflows] Connecting to LittleHorse server...");
-
-        // Give LH server a moment to be fully ready on first boot
-        Thread.sleep(2000);
+        // Give LH server plenty of time to be fully ready (Kafka rebalance)
+        Thread.sleep(15000);
 
         TaskWorkers workers = new TaskWorkers();
+        var stub = config.getBlockingStub();
 
         // -------------------------------------------------
-        // Register all WfSpecs
-        // -------------------------------------------------
-        List<Workflow> workflowDefs = WorkflowDefinitions.all();
-        for (Workflow wf : workflowDefs) {
-            try {
-                wf.registerWfSpec(config.getBlockingStub());
-                System.out.println("[workflows] Registered WfSpec: " + wf.getName());
-            } catch (Exception e) {
-                System.err.println("[workflows] Failed to register WfSpec " + wf.getName() + ": " + e.getMessage());
-            }
-        }
-
-        // -------------------------------------------------
-        // Start all LHTaskWorkers (one per TaskDef)
+        // 1. Start all LHTaskWorkers (one per TaskDef)
         // -------------------------------------------------
         List<String> taskDefs = List.of(
-            "get-account-info",
-            "get-fraud-score",
-            "freeze-account",
-            "unfreeze-account",
-            "post-alert",
-            "post-log-entry",
-            "verify-card",
-            "verify-check",
-            "send-notification",
-            "create-case",
-            "close-case"
+            "get-account-info", "get-fraud-score", "freeze-account", "unfreeze-account",
+            "post-alert", "post-log-entry", "verify-card", "verify-check",
+            "send-notification", "create-case", "close-case",
+            "get-alert-details", "get-user-logs"
         );
 
         for (String taskDef : taskDefs) {
             LHTaskWorker worker = new LHTaskWorker(workers, taskDef, config);
-            try {
-                worker.registerTaskDef();
-                System.out.println("[workflows] Registered TaskDef: " + taskDef);
-            } catch (Exception e) {
-                System.err.println("[workflows] Failed to register TaskDef " + taskDef + ": " + e.getMessage());
+            boolean registered = false;
+            for (int i = 0; i < 5; i++) {
+                try {
+                    worker.registerTaskDef();
+                    System.out.println("[workflows] Registered TaskDef: " + taskDef);
+                    registered = true;
+                    break;
+                } catch (Exception e) {
+                    System.err.println("[workflows] Retry " + (i+1) + " register TaskDef " + taskDef + ": " + e.getMessage());
+                    Thread.sleep(2000);
+                }
             }
-            worker.start();
-            System.out.println("[workflows] Started worker for: " + taskDef);
+            if (registered) {
+                worker.start();
+                System.out.println("[workflows] Started worker for: " + taskDef);
+            }
+        }
+
+        // -------------------------------------------------
+        // 2. Register all WfSpecs (after TaskDefs are ready)
+        // -------------------------------------------------
+        List<Workflow> workflowDefs = WorkflowDefinitions.all();
+        for (Workflow wf : workflowDefs) {
+            boolean registered = false;
+            for (int i = 0; i < 5; i++) {
+                try {
+                    wf.registerWfSpec(stub);
+                    System.out.println("[workflows] Registered WfSpec: " + wf.getName());
+                    registered = true;
+                    break;
+                } catch (Exception e) {
+                    System.err.println("[workflows] Retry " + (i+1) + " register WfSpec " + wf.getName() + ": " + e.getMessage());
+                    Thread.sleep(2000);
+                }
+            }
+            if (!registered) System.err.println("[workflows] PERMANENT FAILURE: " + wf.getName());
         }
 
         System.out.println("[workflows] All workers running. Waiting for tasks...");

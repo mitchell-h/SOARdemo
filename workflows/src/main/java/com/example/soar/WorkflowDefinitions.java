@@ -101,10 +101,23 @@ public class WorkflowDefinitions {
             WfRunVariable alertId    = wf.addVariable("alertId", VariableType.STR).required();
             WfRunVariable username   = wf.addVariable("username", VariableType.STR).required();
             WfRunVariable fraudScore = wf.addVariable("fraudScore", VariableType.DOUBLE).withDefault(0.0);
+            WfRunVariable alertData  = wf.addVariable("alertData", VariableType.STR);
+            WfRunVariable accountData = wf.addVariable("accountData", VariableType.STR);
+            WfRunVariable userLogs   = wf.addVariable("userLogs", VariableType.STR);
 
-            // Notify analyst and log
+            // Notify analyst and gather intelligence
             wf.execute("send-notification", username, "ESCALATED_FOR_INVESTIGATION", alertId);
             wf.execute("post-log-entry", username, "alert-investigation-started", alertId);
+
+            // Detailed Intelligence Gathering
+            NodeOutput alert = wf.execute("get-alert-details", alertId).withRetries(2);
+            wf.mutate(alertData, VariableMutationType.ASSIGN, alert);
+
+            NodeOutput account = wf.execute("get-account-info", username).withRetries(2);
+            wf.mutate(accountData, VariableMutationType.ASSIGN, account);
+
+            NodeOutput logs = wf.execute("get-user-logs", username).withRetries(2);
+            wf.mutate(userLogs, VariableMutationType.ASSIGN, logs);
 
             // PAUSE: wait for ANALYST_DECISION external event
             NodeOutput decision = wf.waitForEvent("ANALYST_DECISION");

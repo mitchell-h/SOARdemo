@@ -176,10 +176,72 @@ async function launchInvestigation() {
     }
 }
 
-function openDecisionModal(wfRunId) {
+async function openDecisionModal(wfRunId) {
     decisionTarget = wfRunId;
     document.getElementById('decision-wfrun-id').textContent = wfRunId;
+    const intelDiv = document.getElementById('decision-intelligence');
+    intelDiv.innerHTML = '<div class="loading">Gathering intelligence...</div>';
+    intelDiv.classList.remove('hidden');
     document.getElementById('decision-modal').classList.remove('hidden');
+
+    try {
+        // Fetch runs to find the one with this ID and its variables
+        const runs = await fetch(API + '/api/workflows').then(r => r.json());
+        const run = runs.find(r => r.id === wfRunId);
+        
+        if (run && run.variables) {
+            renderIntelligence(run.variables);
+        } else {
+            intelDiv.innerHTML = '<div class="modal-hint">Intelligence gathering in progress or unavailable for this run.</div>';
+        }
+    } catch(e) {
+        intelDiv.innerHTML = '<div class="modal-hint">Error fetching intelligence.</div>';
+    }
+}
+
+function renderIntelligence(vars) {
+    const intelDiv = document.getElementById('decision-intelligence');
+    let html = '';
+
+    // 1. Fraud Score
+    const score = vars.fraudScore || 0;
+    const scoreClass = score > 0.6 ? 'high' : (score > 0.35 ? 'med' : '');
+    html += `<div class="intel-section">
+        <div class="intel-header">Risk Intelligence</div>
+        <div class="intel-score ${scoreClass}">${(score * 100).toFixed(1)}% <span style="font-size:11px; font-weight:400; color:var(--text-dim)">fraud probability</span></div>
+    </div>`;
+
+    // 2. Account Info
+    if (vars.accountData) {
+        try {
+            const acc = JSON.parse(vars.accountData);
+            html += `<div class="intel-section">
+                <div class="intel-header">Account Context</div>
+                <div class="intel-grid">
+                    <div class="intel-item"><span class="intel-label">Balance</span><span class="intel-value">$${acc.balance?.toFixed(2)||'0.00'}</span></div>
+                    <div class="intel-item"><span class="intel-label">Home Country</span><span class="intel-value">${acc.previousCountryOfOrigin||'Unknown'}</span></div>
+                    <div class="intel-item"><span class="intel-label">Address</span><span class="intel-value" style="font-size:9px">${acc.address||'-'}</span></div>
+                    <div class="intel-item"><span class="intel-label">Status</span><span class="intel-value">${acc.frozen ? 'FROZEN' : 'ACTIVE'}</span></div>
+                </div>
+            </div>`;
+        } catch(e) {}
+    }
+
+    // 3. Recent Logs
+    if (vars.userLogs) {
+        try {
+            const logs = JSON.parse(vars.userLogs);
+            html += `<div class="intel-section">
+                <div class="intel-header">Recent Activity Timeline</div>
+                <div class="intel-logs">`;
+            logs.slice(0, 5).forEach(l => {
+                html += `[${l.timestamp?.slice(11,16)}] ${l.event} - ${l.status}\n`;
+            });
+            html += `</div></div>`;
+        } catch(e) {}
+    }
+
+    intelDiv.innerHTML = html;
 }
 
 async function sendDecision(decision) {

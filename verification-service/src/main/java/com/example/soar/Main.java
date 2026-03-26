@@ -21,6 +21,7 @@ public class Main {
         Javalin app = Javalin.create(config -> {
             config.jsonMapper(new JavalinJackson(mapper));
         }).start(7005);
+        app.get("/health", ctx -> ctx.result("UP"));
 
         // POST /verify/card
         app.post("/verify/card", ctx -> {
