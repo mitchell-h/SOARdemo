@@ -153,15 +153,25 @@ public class Main {
                             m.put("status", run.getStatus().name());
                             m.put("startTime", run.getStartTime() != null ? run.getStartTime().toString() : "");
                             
-                            // Map variables for frontend
+                            // Map variables for frontend using SearchVariable API
                             Map<String, Object> vars = new HashMap<>();
-                            run.getVariablesMap().forEach((k, v) -> {
-                                if (v.hasStr()) vars.put(k, v.getStr());
-                                else if (v.hasDouble()) vars.put(k, v.getDouble());
-                                else if (v.hasInt()) vars.put(k, v.getInt());
-                                else if (v.hasBool()) vars.put(k, v.getBool());
-                                else vars.put(k, v.toString());
-                            });
+                            try {
+                                SearchVariableRequest varReq = SearchVariableRequest.newBuilder()
+                                    .setWfRunId(id.getId())
+                                    .build();
+                                VariableList varList = lhStub.searchVariable(varReq);
+                                for (Variable v : varList.getResultsList()) {
+                                    String k = v.getId().getName();
+                                    VariableValue val = v.getValue();
+                                    if (val.hasStr()) vars.put(k, val.getStr());
+                                    else if (val.hasDouble()) vars.put(k, val.getDouble());
+                                    else if (val.hasInt()) vars.put(k, val.getInt());
+                                    else if (val.hasBool()) vars.put(k, val.getBool());
+                                    else vars.put(k, val.toString());
+                                }
+                            } catch (Exception e) {
+                                System.err.println("[admin-ui] Failed to fetch variables for " + id.getId() + ": " + e.getMessage());
+                            }
                             m.put("variables", vars);
                             runs.add(m);
                         } catch (Exception ignore) {}
