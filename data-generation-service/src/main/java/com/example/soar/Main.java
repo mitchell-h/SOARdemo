@@ -3,8 +3,8 @@ package com.example.soar;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.javalin.Javalin;
 import io.littlehorse.sdk.common.config.LHConfig;
-import io.littlehorse.sdk.common.proto.RunWfRequest;
-import io.littlehorse.sdk.common.proto.VariableValue;
+import io.littlehorse.sdk.common.proto.*;
+import io.littlehorse.sdk.common.proto.LittleHorseGrpc.LittleHorseBlockingStub;
 import kong.unirest.Unirest;
 
 import java.io.InputStream;
@@ -71,8 +71,20 @@ public class Main {
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         // Generate a new event every 3 seconds
         executor.scheduleAtFixedRate(Main::generateAndPublishEvent, 2, 3, TimeUnit.SECONDS);
-        // Generate a guaranteed high-fraud event every 30 seconds for demo visibility
-        executor.scheduleAtFixedRate(Main::generateHighFraudEvent, 15, 30, TimeUnit.SECONDS);
+
+        // --- Demo Workflows: Ensure one of each every 30 seconds ---
+        
+            // 1. High Fraud (triggers fraud-alert-workflow)
+            executor.scheduleAtFixedRate(Main::generateHighFraudEvent, 10, 30, TimeUnit.SECONDS);
+
+            // 2. Transaction Verification Workflow
+            executor.scheduleAtFixedRate(Main::generateTransactionVerification, 15, 30, TimeUnit.SECONDS);
+
+            // 3. Account Freeze Workflow
+            executor.scheduleAtFixedRate(Main::generateAccountFreeze, 20, 30, TimeUnit.SECONDS);
+
+            // 4. Investigation Workflow
+            executor.scheduleAtFixedRate(Main::generateInvestigation, 25, 30, TimeUnit.SECONDS);
 
         System.out.println("[data-gen] Started. Generating events every 3 seconds.");
     }
@@ -177,6 +189,70 @@ public class Main {
 
         } catch (Exception e) {
             System.err.println("[data-gen] Error generating high-fraud event: " + e.getMessage());
+        }
+    }
+
+    /** Periodically trigger a transaction verification workflow */
+    private static void generateTransactionVerification() {
+        try {
+            if (accounts.isEmpty() || lhStub == null) return;
+            Map<String, Object> account = accounts.get(random.nextInt(accounts.size()));
+            String username = (String) account.get("username");
+
+            RunWfRequest request = RunWfRequest.newBuilder()
+                .setWfSpecName("transaction-verification-workflow")
+                .putVariables("username", VariableValue.newBuilder().setStr(username).build())
+                .putVariables("verifyType", VariableValue.newBuilder().setStr("CARD").build())
+                .putVariables("paymentData", VariableValue.newBuilder().setStr("{\"amount\": 49.99, \"vendor\": \"Demo Store\"}").build())
+                .build();
+
+            WfRun wfRun = lhStub.runWf(request);
+            System.out.println("[data-gen] Triggered transaction-verification-workflow for " + username + " wfRunId=" + wfRun.getId().getId());
+        } catch (Exception e) {
+            System.err.println("[data-gen] Error triggering transaction-verification: " + e.getMessage());
+        }
+    }
+
+    /** Periodically trigger an account freeze workflow */
+    private static void generateAccountFreeze() {
+        try {
+            if (accounts.isEmpty() || lhStub == null) return;
+            Map<String, Object> account = accounts.get(random.nextInt(accounts.size()));
+            String username = (String) account.get("username");
+
+            RunWfRequest request = RunWfRequest.newBuilder()
+                .setWfSpecName("account-freeze-workflow")
+                .putVariables("username", VariableValue.newBuilder().setStr(username).build())
+                .putVariables("reason", VariableValue.newBuilder().setStr("Random Periodic Security Check").build())
+                .build();
+
+            WfRun wfRun = lhStub.runWf(request);
+            System.out.println("[data-gen] Triggered account-freeze-workflow for " + username + " wfRunId=" + wfRun.getId().getId());
+        } catch (Exception e) {
+            System.err.println("[data-gen] Error triggering account-freeze: " + e.getMessage());
+        }
+    }
+
+    /** Periodically trigger an investigation workflow */
+    private static void generateInvestigation() {
+        try {
+            if (accounts.isEmpty() || lhStub == null) return;
+            Map<String, Object> account = accounts.get(random.nextInt(accounts.size()));
+            String username = (String) account.get("username");
+            String alertId = "gen-alert-" + (1000 + random.nextInt(9000));
+            double score = 0.5 + random.nextDouble() * 0.4;
+
+            io.littlehorse.sdk.common.proto.RunWfRequest request = io.littlehorse.sdk.common.proto.RunWfRequest.newBuilder()
+                .setWfSpecName("alert-investigation-workflow")
+                .putVariables("alertId", io.littlehorse.sdk.common.proto.VariableValue.newBuilder().setStr(alertId).build())
+                .putVariables("username", io.littlehorse.sdk.common.proto.VariableValue.newBuilder().setStr(username).build())
+                .putVariables("fraudScore", io.littlehorse.sdk.common.proto.VariableValue.newBuilder().setDouble(score).build())
+                .build();
+
+            io.littlehorse.sdk.common.proto.WfRun wfRun = lhStub.runWf(request);
+            System.out.println("[data-gen] Triggered alert-investigation-workflow for " + username + " alert=" + alertId + " wfRunId=" + wfRun.getId().getId());
+        } catch (Exception e) {
+            System.err.println("[data-gen] Error triggering investigation: " + e.getMessage());
         }
     }
 

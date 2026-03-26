@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * Admin UI Backend
@@ -47,7 +48,7 @@ public class Main {
         Javalin app = Javalin.create(config -> {
             config.jsonMapper(new JavalinJackson(mapper));
             config.staticFiles.add("/public");
-        }).start(7003);
+        }).start("0.0.0.0", 7003);
 
         // Add CORS header to all API responses
         app.before("/api/*", ctx -> ctx.header("Access-Control-Allow-Origin", "*"));
@@ -153,13 +154,13 @@ public class Main {
                             m.put("status", run.getStatus().name());
                             m.put("startTime", run.getStartTime() != null ? run.getStartTime().toString() : "");
                             
-                            // Map variables for frontend using SearchVariable API
+                            // Map variables for frontend using ListVariables API
                             Map<String, Object> vars = new HashMap<>();
                             try {
-                                SearchVariableRequest varReq = SearchVariableRequest.newBuilder()
-                                    .setWfRunId(id.getId())
+                                ListVariablesRequest varReq = ListVariablesRequest.newBuilder()
+                                    .setWfRunId(WfRunId.newBuilder().setId(id.getId()).build())
                                     .build();
-                                VariableList varList = lhStub.searchVariable(varReq);
+                                VariableList varList = lhStub.listVariables(varReq);
                                 for (Variable v : varList.getResultsList()) {
                                     String k = v.getId().getName();
                                     VariableValue val = v.getValue();
@@ -181,22 +182,40 @@ public class Main {
             ctx.json(runs);
         });
 
-        // Trigger alert-investigation-workflow for an alert
         app.post("/api/workflows/investigate", ctx -> {
-            if (lhStub == null) { ctx.status(503).result("LH not connected"); return; }
-            Map<String, Object> body = mapper.readValue(ctx.body(), Map.class);
-            String alertId   = (String) body.get("alertId");
-            String username  = (String) body.get("username");
-            double fraudScore = body.containsKey("fraudScore") ? ((Number) body.get("fraudScore")).doubleValue() : 0.0;
+            try {
+                if (lhStub == null) { ctx.status(503).result("LH not connected"); return; }
+                String bodyStr = ctx.body();
+                System.out.println("[admin-ui] POST /api/workflows/investigate body: " + bodyStr);
+                
+                Map<String, Object> body = mapper.readValue(bodyStr, Map.class);
+                String alertId   = (String) body.get("alertId");
+                String username  = (String) body.get("username");
+                
+                Object scoreObj = body.get("fraudScore");
+                double fraudScore = 0.0;
+                if (scoreObj instanceof Number) {
+                    fraudScore = ((Number) scoreObj).doubleValue();
+                } else if (scoreObj instanceof String) {
+                    fraudScore = Double.parseDouble((String) scoreObj);
+                }
 
-            RunWfRequest req = RunWfRequest.newBuilder()
-                .setWfSpecName("alert-investigation-workflow")
-                .putVariables("alertId",    VariableValue.newBuilder().setStr(alertId).build())
-                .putVariables("username",   VariableValue.newBuilder().setStr(username).build())
-                .putVariables("fraudScore", VariableValue.newBuilder().setDouble(fraudScore).build())
-                .build();
-            WfRun run = lhStub.runWf(req);
-            ctx.json(Map.of("wfRunId", run.getId().getId(), "status", run.getStatus().name()));
+                System.out.println("[admin-ui] Triggering investigation for " + username + " alert=" + alertId);
+
+                RunWfRequest req = RunWfRequest.newBuilder()
+                    .setWfSpecName("alert-investigation-workflow")
+                    .putVariables("alertId",    VariableValue.newBuilder().setStr(alertId != null ? alertId : "").build())
+                    .putVariables("username",   VariableValue.newBuilder().setStr(username != null ? username : "").build())
+                    .putVariables("fraudScore", VariableValue.newBuilder().setDouble(fraudScore).build())
+                    .build();
+                
+                WfRun run = lhStub.runWf(req);
+                ctx.json(Map.of("wfRunId", run.getId().getId(), "status", run.getStatus().name()));
+            } catch (Exception e) {
+                System.err.println("[admin-ui] Error in investigate: " + e.getMessage());
+                e.printStackTrace();
+                ctx.status(500).json(Map.of("error", e.getMessage()));
+            }
         });
 
         // Send ANALYST_DECISION external event to a running investigation workflow
@@ -208,7 +227,7 @@ public class Main {
 
             PutExternalEventRequest event = PutExternalEventRequest.newBuilder()
                 .setWfRunId(WfRunId.newBuilder().setId(wfRunId).build())
-                .setExternalEventDefId(ExternalEventDefId.newBuilder().setName("ANALYST_DECISION").build())
+                .setExternalEventDefId(ExternalEventDefId.newBuilder().setName("analyst-decision").build())
                 .setContent(VariableValue.newBuilder().setStr(decision).build())
                 .build();
             lhStub.putExternalEvent(event);
@@ -220,11 +239,12 @@ public class Main {
 
     private static void initLhClient() {
         try {
+            System.out.println("[admin-ui] Initializing LittleHorse client (connecting to localhost:3333)...");
             LHConfig config = new LHConfig();
             lhStub = config.getBlockingStub();
             System.out.println("[admin-ui] Connected to LittleHorse");
         } catch (Exception e) {
-            System.err.println("[admin-ui] LH not available (UI will work without workflow status): " + e.getMessage());
+            System.err.println("[admin-ui] LH not available: " + e.getMessage());
         }
     }
 }

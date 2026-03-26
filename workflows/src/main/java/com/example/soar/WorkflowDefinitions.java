@@ -119,8 +119,8 @@ public class WorkflowDefinitions {
             NodeOutput logs = wf.execute("get-user-logs", username).withRetries(2);
             wf.mutate(userLogs, VariableMutationType.ASSIGN, logs);
 
-            // PAUSE: wait for ANALYST_DECISION external event
-            NodeOutput decision = wf.waitForEvent("ANALYST_DECISION");
+            // PAUSE: wait for analyst-decision external event
+            NodeOutput decision = wf.waitForEvent("analyst-decision");
 
             // Branch: FREEZE
             wf.doIf(

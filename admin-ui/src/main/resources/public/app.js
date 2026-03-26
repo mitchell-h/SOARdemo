@@ -7,6 +7,7 @@ let currentTab = 'dashboard';
 let investigateTarget = null;  // alert being investigated
 let decisionTarget = null;     // wfRunId for analyst decision
 let dashInterval = null;
+let alertsCache = {};          // data cache for modals
 
 // ========== TAB NAVIGATION ==========
 
@@ -96,6 +97,7 @@ async function loadAlerts() {
 
     try {
         const alerts = await fetch(url).then(r => r.json());
+        alerts.forEach(a => { if(a.id) alertsCache[a.id] = a; });
         container.innerHTML = alerts.length
             ? renderAlertsTable(alerts, true)
             : '<div class="empty-state">No alerts found</div>';
@@ -121,7 +123,7 @@ function renderAlertsTable(alerts, showActions) {
         if (showActions) {
             html += `<td style="display:flex;gap:6px;flex-wrap:wrap">`;
             if (a.status === 'OPEN') {
-                html += `<button class="btn btn-sm btn-primary" onclick="openInvestigateModal(${JSON.stringify(JSON.stringify(a))})">Investigate</button>`;
+                html += `<button class="btn btn-sm btn-primary" onclick="openInvestigateModalById('${a.id}')">Investigate</button>`;
             }
             if (a.wfRunId) {
                 html += `<button class="btn btn-sm btn-secondary" onclick="openDecisionModal('${a.wfRunId}')">Decide</button>`;
@@ -135,8 +137,9 @@ function renderAlertsTable(alerts, showActions) {
     return html;
 }
 
-function openInvestigateModal(alertJson) {
-    investigateTarget = JSON.parse(alertJson);
+function openInvestigateModalById(id) {
+    investigateTarget = alertsCache[id];
+    if (!investigateTarget) return;
     document.getElementById('modal-alert-detail').innerHTML =
         `<div>Alert: <strong>${investigateTarget.id}</strong></div>
          <div>User: <strong>${investigateTarget.username || investigateTarget.userId}</strong></div>

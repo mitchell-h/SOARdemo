@@ -34,7 +34,7 @@ Each module follows standard Java/Gradle layout:
 
 ## Services
 
-### Logs API (`:7001`)
+### Logs API (`localhost:7001`)
 Stores and retrieves banking event logs. On startup, ~600 historical log entries are pre-loaded from `src/main/resources/logs.json`.
 
 **Endpoints:**
@@ -49,7 +49,7 @@ Stores and retrieves banking event logs. On startup, ~600 historical log entries
 
 ---
 
-### Core Banking Service (`:7002`)
+### Core Banking Service (`localhost:7002`)
 Manages 3,000 accounts and 2,000 users, pre-loaded from JSON flat files on boot. No external database.
 
 **Endpoints:**
@@ -66,7 +66,7 @@ Account fields: `username`, `accountNumber`, `balance`, `previousCountryOfOrigin
 
 ---
 
-### Admin UI (`:7003`)
+### Admin UI (`localhost:7003`)
 A dark-themed single-page application with a Javalin backend. The backend proxies requests to all other services and communicates directly with LittleHorse via gRPC for workflow control.
 
 **Tabs:**
@@ -78,7 +78,7 @@ A dark-themed single-page application with a Javalin backend. The backend proxie
 
 ---
 
-### Fraud Detection Engine (`:7004`)
+### Fraud Detection Engine (`localhost:7004`)
 Stateless HTTP scoring service. Returns a fraud score (0.0-1.0) and risk level.
 
 **Scoring rules:**
@@ -94,7 +94,7 @@ Stateless HTTP scoring service. Returns a fraud score (0.0-1.0) and risk level.
 
 ---
 
-### Verification Service (`:7005`)
+### Verification Service (`localhost:7005`)
 Validates payment instruments and delegates account freeze/unfreeze to the core banking service.
 
 **Endpoints:**
@@ -107,7 +107,7 @@ Validates payment instruments and delegates account freeze/unfreeze to the core 
 
 ---
 
-### Data Generation Service (`:7006`)
+### Data Generation Service (`localhost:7006`)
 Continuously generates realistic banking events using the 3,000 accounts as a data pool.
 
 **Behavior:**
