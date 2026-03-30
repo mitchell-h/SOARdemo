@@ -1,4 +1,4 @@
-# Stock Market Demo
+# SOARdemo
 
 ## General Instructions
 - Do NOT EVER unless expressly told, use an emoji
