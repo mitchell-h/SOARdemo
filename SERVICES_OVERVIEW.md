@@ -10,6 +10,46 @@ The SOAR demo relies on a running LittleHorse instance for orchestration.
 - **LittleHorse Server (gRPC)**: `2023` - Primary communication port for task workers and admin actions.
 - **LittleHorse Dashboard**: `8080` - Web UI for monitoring workflows and task status.
 
+## Architecture Overview (LittleHorse Standpoint)
+
+The diagram below illustrates how LittleHorse orchestrates the interaction between various microservices. The **Workflows Service** hosts task workers that poll the **LittleHorse Server** for jobs, while other services trigger workflows or send external events to influence running processes.
+
+```text
+                      +-------------------+
+                      |   LH Dashboard    |
+                      |    (Port 8080)    |
+                      +---------+---------+
+                                |
+                                v
++----------------+    +-------------------+    +-------------------+
+|  Admin UI      |--->|     LH Server     |<---|     Data Gen      |
+|  (Port 7003)   |    |    (Port 2023)    |    |   (Port 7006)     |
++----------------+    +---------+---------+    +-------------------+
+                                |
+                                | (gRPC Poll)
+                                v
+                      +-------------------+
+                      |  Workflows Service|
+                      |  (Task Workers)   |
+                      +---------+---------+
+                                |
+         +----------------------+----------------------+
+         |            (Invoke REST APIs)               |
+         v                      v                      v
++----------------+    +-------------------+    +-------------------+
+|    Logs API    |    |   Core Banking    |    |  Fraud Detection  |
+|  (Port 7001)   |    |    (Port 7002)    |    |    (Port 7004)    |
++----------------+    +-------------------+    +-------------------+
+         |                      |                      |
+         +----------+-----------+-----------+----------+
+                    |                       |
+                    v                       v
+          +-------------------+   +-------------------+
+          |   Verification    |   |  Case Management  |
+          |    (Port 7005)    |   |    (Port 7007)    |
+          +-------------------+   +-------------------+
+```
+
 ---
 
 ## 1. Logs API

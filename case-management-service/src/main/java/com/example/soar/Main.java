@@ -90,6 +90,27 @@ public class Main {
             System.out.println("[case-management] Closed case: " + id + " with resolution: " + resolution);
             ctx.json(c);
         });
+
+        // POST /api/cases/{id}/note - Add a note to a case
+        app.post("/api/cases/{id}/note", ctx -> {
+            String id = ctx.pathParam("id");
+            Case c = cases.get(id);
+            if (c == null) {
+                ctx.status(404).result("Case not found");
+                return;
+            }
+
+            Map<String, String> body = ctx.bodyAsClass(Map.class);
+            String note = body.get("note");
+            if (note != null) {
+                c.setDetails(c.getDetails() + "\n[Note " + Instant.now() + "]: " + note);
+                saveCases();
+                System.out.println("[case-management] Added note to case: " + id);
+                ctx.json(c);
+            } else {
+                ctx.status(400).result("Note content is required");
+            }
+        });
     }
 
     private static void loadCases() {

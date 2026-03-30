@@ -67,7 +67,11 @@ public class WorkflowDefinitions {
             wf.doIf(
                 wf.condition(fraudScore, Comparator.GREATER_THAN, 0.60),
                 ifBlock -> {
-                    ifBlock.execute("freeze-account", username).withRetries(3);
+                    NodeOutput freezeResult = ifBlock.execute("freeze-account", username).withRetries(3);
+                    ifBlock.doIf(
+                        ifBlock.condition(freezeResult, Comparator.EQUALS, "FAILED"),
+                        failBlock -> failBlock.execute("fail-workflow", "Freeze-account task failed in fraudAlertWorkflow")
+                    );
                     ifBlock.execute("create-case", username, "HIGH_FRAUD_SCORE", "SYSTEM", "Frozen due to fraud score > 0.60");
                     ifBlock.execute("post-alert", username, fraudScore, txJson, "CRITICAL");
                     ifBlock.execute("send-notification", username, "ACCOUNT_FROZEN_HIGH_FRAUD", fraudScore);
@@ -126,7 +130,11 @@ public class WorkflowDefinitions {
             wf.doIf(
                 wf.condition(decision, Comparator.EQUALS, "FREEZE"),
                 freezeBlock -> {
-                    freezeBlock.execute("freeze-account", username).withRetries(3);
+                    NodeOutput freezeResult = freezeBlock.execute("freeze-account", username).withRetries(3);
+                    freezeBlock.doIf(
+                        freezeBlock.condition(freezeResult, Comparator.EQUALS, "FAILED"),
+                        failBlock -> failBlock.execute("fail-workflow", "Freeze-account task failed in alertInvestigationWorkflow")
+                    );
                     freezeBlock.execute("create-case", username, "ANALYST_FREEZE", "ANALYST", alertId);
                     freezeBlock.execute("post-log-entry", username, "investigation-resulted-in-freeze", alertId);
                     freezeBlock.execute("send-notification", username, "ACCOUNT_FROZEN_BY_ANALYST", alertId);
@@ -189,8 +197,37 @@ public class WorkflowDefinitions {
             WfRunVariable username = wf.addVariable("username", VariableType.STR).required();
             WfRunVariable reason   = wf.addVariable("reason", VariableType.STR).withDefault("COMPLIANCE");
 
-            // Freeze with 3 retries, then alert and notify
-            wf.execute("freeze-account", username).withRetries(3);
+            // 1. Check for global process failure (1 in 5)
+            NodeOutput globalFailResult = wf.execute("check-global-failure");
+            wf.doIf(
+                wf.condition(globalFailResult, Comparator.EQUALS, "FAIL"),
+                failBlock -> failBlock.execute("fail-workflow", "Account freeze completely failed")
+            );
+
+            // 2. Execute freeze with retries
+            NodeOutput freezeResult = wf.execute("freeze-account", username).withRetries(2);
+
+            // 3. Handle freeze failure
+            wf.doIf(
+                wf.condition(freezeResult, Comparator.EQUALS, "FAILED"),
+                failBlock -> {
+                    NodeOutput caseId = failBlock.execute("find-open-case", username);
+                    
+                    failBlock.doIf(
+                        failBlock.condition(caseId, Comparator.NOT_EQUALS, "NONE"),
+                        noteBlock -> noteBlock.execute("add-case-note", caseId, "Account freeze attempt failed for user: " + username)
+                    );
+                    
+                    failBlock.doIf(
+                        failBlock.condition(caseId, Comparator.EQUALS, "NONE"),
+                        createBlock -> createBlock.execute("create-case", username, "FREEZE_FAILURE", "SYSTEM", "Freeze attempt failed")
+                    );
+
+                    failBlock.execute("fail-workflow", "Account freeze task failed after retries");
+                }
+            );
+
+            // 4. Success flow
             wf.execute("post-alert", username, 0.0, "{}", "HIGH");
             wf.execute("post-log-entry", username, "account-frozen-by-workflow", reason);
             wf.execute("send-notification", username, "ACCOUNT_FROZEN_COMPLIANCE", reason);
