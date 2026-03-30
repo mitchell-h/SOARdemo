@@ -324,3 +324,12 @@ option { background: var(--bg-panel); }
 .intel-score { font-size: 18px; font-weight: 700; }
 .intel-score.high { color: var(--critical); }
 .intel-score.med  { color: var(--warning); }
+
+/* Case Details Styling */
+.details-td {
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  color: var(--text-sec) !important;
+  background: var(--bg-panel) !important;
+  border-bottom: 1px solid var(--border) !important;
+}

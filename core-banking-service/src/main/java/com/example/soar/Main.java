@@ -60,6 +60,14 @@ public class Main {
         // POST /accounts/{username}/freeze
         app.post("/accounts/{username}/freeze", ctx -> {
             String username = ctx.pathParam("username");
+            
+            // 20% random failure rate
+            if (new Random().nextInt(5) == 0) {
+                System.err.println("[core-banking] Randomly failing freeze for: " + username);
+                ctx.status(500).result("Random internal failure");
+                return;
+            }
+
             Optional<Account> acc = findByUsername(username);
             if (acc.isPresent()) {
                 acc.get().setFrozen(true);

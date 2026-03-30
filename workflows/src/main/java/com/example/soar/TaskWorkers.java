@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -19,7 +20,8 @@ import java.util.UUID;
  * TaskDefs registered:
  *   get-account-info, get-fraud-score, freeze-account, unfreeze-account,
  *   post-alert, post-log-entry, verify-card, verify-check, send-notification,
- *   create-case, close-case
+ *   create-case, close-case, get-alert-details, get-user-logs,
+ *   check-global-failure, find-open-case, add-case-note, fail-workflow
  */
 public class TaskWorkers {
 
@@ -109,7 +111,10 @@ public class TaskWorkers {
     public String freezeAccount(String username) {
         HttpResponse<String> resp = Unirest.post(CORE_BANKING_URL + "/accounts/" + username + "/freeze").asString();
         System.out.println("[task:freeze-account] " + username + " -> " + resp.getStatus());
-        return resp.getStatus() == 204 ? "FROZEN" : "ERROR_" + resp.getStatus();
+        if (resp.getStatus() == 204) {
+            return "SUCCESS";
+        }
+        return "FAILED";
     }
 
     // -----------------------------------------------------------------
@@ -282,5 +287,68 @@ public class TaskWorkers {
             System.err.println("[task:close-case] error: " + e.getMessage());
         }
         return "ERROR";
+    }
+
+    // -----------------------------------------------------------------
+    // check-global-failure: 20% chance of returning "FAIL"
+    // -----------------------------------------------------------------
+    @LHTaskMethod("check-global-failure")
+    public String checkGlobalFailure() {
+        if (new Random().nextInt(5) == 0) {
+            System.out.println("[task:check-global-failure] Global failure triggered!");
+            return "FAIL";
+        }
+        return "PASS";
+    }
+
+    // -----------------------------------------------------------------
+    // find-open-case: returns caseId or "NONE"
+    // -----------------------------------------------------------------
+    @LHTaskMethod("find-open-case")
+    public String findOpenCase(String username) {
+        HttpResponse<JsonNode> resp = Unirest.get(CASE_MANAGEMENT_URL + "/api/cases")
+            .queryString("username", username)
+            .queryString("status", "OPEN")
+            .asJson();
+        
+        if (resp.isSuccess() && resp.getBody().getArray().length() > 0) {
+            String caseId = resp.getBody().getArray().getJSONObject(0).getString("id");
+            System.out.println("[task:find-open-case] found open case " + caseId + " for " + username);
+            return caseId;
+        }
+        return "NONE";
+    }
+
+    // -----------------------------------------------------------------
+    // add-case-note
+    // -----------------------------------------------------------------
+    @LHTaskMethod("add-case-note")
+    public String addCaseNote(String caseId, String note) {
+        try {
+            Map<String, String> payload = new HashMap<>();
+            payload.put("note", note);
+
+            HttpResponse<String> resp = Unirest.post(CASE_MANAGEMENT_URL + "/api/cases/" + caseId + "/note")
+                .header("Content-Type", "application/json")
+                .body(mapper.writeValueAsString(payload))
+                .asString();
+            
+            if (resp.getStatus() == 200) {
+                System.out.println("[task:add-case-note] added note to case " + caseId);
+                return "OK";
+            }
+        } catch (Exception e) {
+            System.err.println("[task:add-case-note] error: " + e.getMessage());
+        }
+        return "ERROR";
+    }
+
+    // -----------------------------------------------------------------
+    // fail-workflow: forces a failure in the workflow run
+    // -----------------------------------------------------------------
+    @LHTaskMethod("fail-workflow")
+    public void failWorkflow(String reason) {
+        System.err.println("[task:fail-workflow] Failing workflow: " + reason);
+        throw new RuntimeException(reason);
     }
 }

@@ -421,7 +421,7 @@ function renderCasesTable(cases) {
         html += `</td>`;
         html += '</tr>';
         if (c.details) {
-            html += `<tr class="details-row"><td colspan="8" style="padding:4px 12px; font-size:11px; color:#888; background:#111">Details: ${c.details}</td></tr>`;
+            html += `<tr class="details-row"><td colspan="8" class="details-td">Details: ${c.details}</td></tr>`;
         }
     }
     html += '</tbody></table>';

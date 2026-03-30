@@ -27,21 +27,27 @@ public class Main {
             "get-account-info", "get-fraud-score", "freeze-account", "unfreeze-account",
             "post-alert", "post-log-entry", "verify-card", "verify-check",
             "send-notification", "create-case", "close-case",
-            "get-alert-details", "get-user-logs"
+            "get-alert-details", "get-user-logs",
+            "check-global-failure", "find-open-case", "add-case-note", "fail-workflow"
         );
 
         // 1. Register all TaskDefs
         for (String taskDef : taskDefs) {
             LHTaskWorker worker = new LHTaskWorker(workers, taskDef, config);
+            boolean registered = false;
             for (int i = 0; i < 5; i++) {
                 try {
                     worker.registerTaskDef();
                     System.out.println("[workflows] Registered TaskDef: " + taskDef);
+                    registered = true;
                     break;
                 } catch (Exception e) {
                     System.err.println("[workflows] Retry " + (i+1) + " register TaskDef " + taskDef + ": " + e.getMessage());
                     Thread.sleep(2000);
                 }
+            }
+            if (!registered) {
+                throw new RuntimeException("Failed to register " + taskDef);
             }
         }
 
