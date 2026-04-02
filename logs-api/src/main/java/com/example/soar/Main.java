@@ -102,14 +102,15 @@ public class Main {
             ctx.status(201).json(alert);
         });
 
-        // GET /alerts - list all alerts with optional filters
         app.get("/alerts", ctx -> {
+            String id = ctx.queryParam("id");
             String status = ctx.queryParam("status");
             String severity = ctx.queryParam("severity");
             String userId = ctx.queryParam("userId");
 
             List<Alert> filtered = alerts.stream()
-                .filter(a -> status == null || status.equals(a.getStatus()))
+                .filter(a -> id == null || id.isEmpty() || id.equals(a.getId()))
+                .filter(a -> (status == null || status.isEmpty()) ? !"CLOSED".equals(a.getStatus()) : status.equals(a.getStatus()))
                 .filter(a -> severity == null || severity.equals(a.getSeverity()))
                 .filter(a -> userId == null || userId.equals(a.getUserId()))
                 .sorted(Comparator.comparing(Alert::getTimestamp).reversed())

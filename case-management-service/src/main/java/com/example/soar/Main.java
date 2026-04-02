@@ -1,5 +1,6 @@
 package com.example.soar;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.javalin.Javalin;
@@ -45,7 +46,7 @@ public class Main {
 
         // POST /api/cases - Create a new case
         app.post("/api/cases", ctx -> {
-            Map<String, String> body = ctx.bodyAsClass(Map.class);
+            Map<String, String> body = mapper.readValue(ctx.body(), new TypeReference<Map<String, String>>() {});
             String username = body.get("username");
             String reason = body.get("reason");
             String sourceIp = body.get("sourceIp");
@@ -79,7 +80,7 @@ public class Main {
                 return;
             }
 
-            Map<String, String> body = ctx.bodyAsClass(Map.class);
+            Map<String, String> body = mapper.readValue(ctx.body(), new TypeReference<Map<String, String>>() {});
             String resolution = body.getOrDefault("resolution", "RESOLVED");
 
             c.setStatus("CLOSED");
@@ -100,7 +101,7 @@ public class Main {
                 return;
             }
 
-            Map<String, String> body = ctx.bodyAsClass(Map.class);
+            Map<String, String> body = mapper.readValue(ctx.body(), new TypeReference<Map<String, String>>() {});
             String note = body.get("note");
             if (note != null) {
                 c.setDetails(c.getDetails() + "\n[Note " + Instant.now() + "]: " + note);

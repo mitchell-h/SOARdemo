@@ -1,11 +1,23 @@
 package com.example.soar;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.javalin.Javalin;
 import io.javalin.json.JavalinJackson;
 import io.littlehorse.sdk.common.config.LHConfig;
-import io.littlehorse.sdk.common.proto.*;
+import io.littlehorse.sdk.common.proto.SearchWfRunRequest;
+import io.littlehorse.sdk.common.proto.WfRunIdList;
+import io.littlehorse.sdk.common.proto.WfRunId;
+import io.littlehorse.sdk.common.proto.WfRun;
+import io.littlehorse.sdk.common.proto.ListVariablesRequest;
+import io.littlehorse.sdk.common.proto.VariableList;
+import io.littlehorse.sdk.common.proto.Variable;
+import io.littlehorse.sdk.common.proto.VariableValue;
+import io.littlehorse.sdk.common.proto.RunWfRequest;
+import io.littlehorse.sdk.common.proto.PutExternalEventRequest;
+import io.littlehorse.sdk.common.proto.ExternalEventDefId;
+import io.littlehorse.sdk.common.proto.LittleHorseGrpc;
 import kong.unirest.HttpResponse;
 import kong.unirest.JsonNode;
 import kong.unirest.Unirest;
@@ -68,13 +80,21 @@ public class Main {
 
         // ---- Alerts proxy ----
         app.get("/api/alerts", ctx -> {
+            String id = ctx.queryParam("id");
             String status = ctx.queryParam("status");
             String severity = ctx.queryParam("severity");
             kong.unirest.GetRequest req = Unirest.get(LOGS_API_URL + "/alerts");
+            if (id != null) req = req.queryString("id", id);
             if (status != null) req = req.queryString("status", status);
             if (severity != null) req = req.queryString("severity", severity);
             HttpResponse<String> resp = req.asString();
             ctx.contentType("application/json").result(resp.getBody());
+        });
+
+        app.get("/api/alerts/{id}", ctx -> {
+            String id = ctx.pathParam("id");
+            HttpResponse<String> resp = Unirest.get(LOGS_API_URL + "/alerts/" + id).asString();
+            ctx.status(resp.getStatus()).contentType("application/json").result(resp.getBody());
         });
 
         app.patch("/api/alerts/{id}/status", ctx -> {
@@ -188,7 +208,7 @@ public class Main {
                 String bodyStr = ctx.body();
                 System.out.println("[admin-ui] POST /api/workflows/investigate body: " + bodyStr);
                 
-                Map<String, Object> body = mapper.readValue(bodyStr, Map.class);
+                Map<String, Object> body = mapper.readValue(bodyStr, new TypeReference<Map<String, Object>>() {});
                 String alertId   = (String) body.get("alertId");
                 String username  = (String) body.get("username");
                 
@@ -221,7 +241,7 @@ public class Main {
         // Send ANALYST_DECISION external event to a running investigation workflow
         app.post("/api/workflows/analyst-decision", ctx -> {
             if (lhStub == null) { ctx.status(503).result("LH not connected"); return; }
-            Map<String, Object> body = mapper.readValue(ctx.body(), Map.class);
+            Map<String, Object> body = mapper.readValue(ctx.body(), new TypeReference<Map<String, Object>>() {});
             String wfRunId  = (String) body.get("wfRunId");
             String decision = (String) body.get("decision"); // "FREEZE" or "CLOSE"
 

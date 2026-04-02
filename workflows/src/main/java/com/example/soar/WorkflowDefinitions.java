@@ -74,7 +74,7 @@ public class WorkflowDefinitions {
                     );
                     ifBlock.execute("create-case", username, "HIGH_FRAUD_SCORE", "SYSTEM", "Frozen due to fraud score > 0.60");
                     ifBlock.execute("post-alert", username, fraudScore, txJson, "CRITICAL");
-                    ifBlock.execute("send-notification", username, "ACCOUNT_FROZEN_HIGH_FRAUD", fraudScore);
+                    ifBlock.execute("send-notification", username, "ACCOUNT_FROZEN_HIGH_FRAUD", fraudScore).timeout(60);
                 }
             );
 
